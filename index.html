@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketplace Híbrido</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-blue-900 text-white font-sans">
+
+    <div id="auth-container" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md text-gray-800">
+            <h2 id="auth-title" class="text-2xl font-bold mb-6 text-center text-blue-900">Entrar no Marketplace</h2>
+            
+            <div class="space-y-4">
+                <input type="email" id="email" placeholder="Seu Email" class="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white text-black">
+                <input type="password" id="password" placeholder="Sua Senha" class="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white text-black">
+                
+                <button onclick="handleAuth()" id="btn-auth" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">Acessar</button>
+            </div>
+
+            <div class="mt-6 text-center text-sm">
+                <button onclick="toggleMode()" id="btn-toggle" class="text-blue-600 font-bold hover:underline">Ainda não tem conta? Cadastre-se</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-container" class="hidden min-h-screen bg-gray-100 text-gray-800 p-6">
+        <header class="flex justify-between items-center mb-8 border-b pb-4">
+            <h1 class="text-2xl font-bold text-blue-900">Marketplace Híbrido</h1>
+            <div class="flex items-center gap-4">
+                <span id="user-display" class="text-sm text-gray-600"></span>
+                <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded font-bold hover:bg-red-600">Sair</button>
+            </div>
+        </header>
+
+        <main>
+            <h2 class="text-xl font-bold mb-4">Catálogo de Serviços</h2>
+            <div id="servicos-lista" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <p class="text-gray-500 italic">Carregando serviços do Firestore...</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // CONFIGURAÇÃO REAL EXTRAÍDA DA SUA IMAGEM
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnu2aeI4ainMj3DgApxgQps0mSNFFLavs",
+            authDomain: "marketplace-hibrido.firebaseapp.com",
+            projectId: "marketplace-hibrido",
+            storageBucket: "marketplace-hibrido.firebasestorage.app",
+            messagingSenderId: "1768762634630",
+            appId: "1:1768762634630:web:447545229712a4f4949216"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let isRegistering = false;
+
+        // Trocar entre Login e Cadastro
+        window.toggleMode = () => {
+            isRegistering = !isRegistering;
+            document.getElementById('auth-title').innerText = isRegistering ? "Criar Conta" : "Entrar no Marketplace";
+            document.getElementById('btn-auth').innerText = isRegistering ? "Cadastrar" : "Acessar";
+            document.getElementById('btn-toggle').innerText = isRegistering ? "Já tem conta? Entre" : "Ainda não tem conta? Cadastre-se";
+        };
+
+        // Lógica de Autenticação (Firebase Auth)
+        window.handleAuth = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                if (isRegistering) {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    alert("Conta criada! Bem-vindo.");
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+            } catch (error) {
+                alert("Erro: " + error.code);
+            }
+        };
+
+        // Sair do sistema
+        window.logout = () => signOut(auth);
+
+        // Observador de Usuário (Troca de Telas)
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('auth-container').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('user-display').innerText = user.email;
+                carregarServicos();
+            } else {
+                document.getElementById('auth-container').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('hidden');
+            }
+        });
+
+        // Carregar do Firestore (Fase 3)
+        async function carregarServicos() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "servicos"));
+                const lista = document.getElementById('servicos-lista');
+                lista.innerHTML = "";
+                
+                if (querySnapshot.empty) {
+                    lista.innerHTML = "<p class='text-gray-500'>Nenhum serviço cadastrado ainda.</p>";
+                    return;
+                }
+
+                querySnapshot.forEach((doc) => {
+                    const s = doc.data();
+                    lista.innerHTML += `
+                        <div class="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-600">
+                            <h3 class="font-bold text-xl text-blue-900 mb-2">${s.nome || 'Sem Nome'}</h3>
+                            <p class="text-green-600 font-bold text-lg mb-2">R$ ${s.preco || '0,00'}</p>
+                            <p class="text-sm text-gray-600">${s.descricao || 'Sem descrição.'}</p>
+                            <button class="mt-4 w-full bg-gray-200 text-gray-800 py-2 rounded font-bold hover:bg-gray-300">Ver Detalhes</button>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error("Erro ao ler Firestore:", err);
+            }
+        }
+    </script>
+</body>
+</html>
